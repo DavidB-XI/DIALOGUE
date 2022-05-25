@@ -26,29 +26,23 @@
 #' @export
 #' 
 
-DIALOGUE.run<-function(rA,main,k = 3,results.dir = getwd(),plot.flag = T,pheno = NULL,
-                       PMD2 = F,conf = "cellQ",covar = c("cellQ","tme.qc"),n.genes = 200,
-                       averaging.function = colMedians,p.anova = 0.05,specific.pair = NULL,
-                       parallel.vs = F,center.flag = T,extra.sparse = F, bypass.emp = F, abn.c = 15, spatial.flag = F){
-  full.version <- F
-  names(rA)<-laply(rA,function(r) r@name)
-  R<-DIALOGUE1(rA = rA,k = k,main = main,
-               results.dir = results.dir, PMD2 = PMD2,covar = covar,conf = conf,
-               n.genes = n.genes,averaging.function = averaging.function,extra.sparse = extra.sparse,
-               p.anova = p.anova,specific.pair = specific.pair,center.flag = center.flag,
-               bypass.emp = bypass.emp,abn.c = abn.c,spatial.flag = spatial.flag)
-  if(R$message=="No programs"){return(R)}
-  if(!is.null(specific.pair)){
-    main<-paste(main,paste(specific.pair,collapse = "."),sep = "_")
-    rA<-rA[specific.pair]
-  }
-  R<-DIALOGUE2(rA = rA,main = main,results.dir = results.dir,parallel.vs = parallel.vs)
-  R<-DIALOGUE3(rA = rA,main = main,results.dir = results.dir,full.version = full.version,pheno = pheno)
+
+DIALOGUE.run<-function(rA,
+                       main,
+                       config = dialogue_config(F)){
+
+  X <- DIALOGUE.feature_select(rA, config)
+  R <- DIALOGUE.run_PMD(rA, X, config)
+  R <- DIALOGUE.mcp(rA = rA, main = main, config = config)
+  R <- DIALOGUE.summary(rA = rA,main = main, config = config)
+  
   if(plot.flag){
     DIALOGUE.plot(R,results.dir = results.dir,pheno = pheno)
   }
+  
   return(R)
 }
+
 
 DIALOGUE.pheno<-function(R,pheno =  "clin.status",cca.flag = F,rA,frm,selected.samples = NULL){
   k<-R$k["DIALOGUE"]
@@ -91,22 +85,18 @@ DIALOGUE.pheno<-function(R,pheno =  "clin.status",cca.flag = F,rA,frm,selected.s
   return(Z)
 }
 
-DIALOGUE1<-function(rA,k = 5,main,results.dir = "~/Desktop/DIALOGUE.results/",conf = "cellQ",
-                    covar = c("cellQ","tme.qc","sex","pathology"),n.genes = 200,PMD2 = F,extra.sparse = F,
-                    averaging.function = colMeans,p.anova = 0.05,specific.pair = NULL,center.flag = F,
-                    seed1 = 1234,bypass.emp = F,abn.c = 15,spatial.flag = F){
+DIALOGUE.feature_select <- function(rA, config=config){
   
-  print("#************DIALOGUE Step I: PMD ************#")
-  dir.create(results.dir)
-  X<-lapply(rA, function(r){
-    X1<-average.mat.rows(r@X,r@samples,f = averaging.function)
-    if(spatial.flag){return(X1)}
-    b<-get.abundant(r@samples,abn.c = abn.c,boolean.flag = T)
+  X <- lapply(rA, function(r){
+    X1<-average.mat.rows(r@X,r@samples,f = config$averaging.function)
+    if(config$spatial.flag){return(X1)}
+    b<-get.abundant(r@samples,abn.c = config$abn.c, boolean.flag = T)
     p<-p.adjust(apply.anova(X = r@X[b,],y = r@samples[b],MARGIN = 2),method = "BH")
-    print(paste0(r@name,": Removing ",sum(p>p.anova)," of ",length(p)," features."))
-    X1<-X1[,names(p)[p<p.anova]]
+    print(paste0(r@name,": Removing ",sum(p>config$p.anova)," of ",length(p)," features."))
+    X1<-X1[,names(p)[p<config$p.anova]]
     return(X1)
   })
+  
   cell.types<-names(rA)
   names(X)<-cell.types
   n1<-length(cell.types)
@@ -114,43 +104,48 @@ DIALOGUE1<-function(rA,k = 5,main,results.dir = "~/Desktop/DIALOGUE.results/",co
   # Finding shared samples
   samples<-unlist(lapply(cell.types, function(x) rownames(X[[x]])))
   samplesU<-get.abundant(samples,n1)
-  if(length(samplesU)<5){
+  if(length(samplesU)<3){
     return("Error: Cannot run DIALOGUE with less than 5 samples.")
   }
   
   # Centering and scalling (optional)
   f<-function(X1){
-    if(center.flag){
+    if(config$center.flag){
       X1<-center.matrix(X1,dim = 2,sd.flag = T)
-      X1<-cap.mat(X1,cap = 0.01,MARGIN = 2)
     }
     X1<-X1[samplesU,]
     return(X1)
   }
   X<-lapply(X, f)
-  k1<-ncol(X[[1]])
   
-  if(is.null(specific.pair)){
-    out<-DIALOGUE1.PMD(X = X,k = k,PMD2 = PMD2,extra.sparse = extra.sparse,seed1 = seed1)
-    emp.p<-DIALOGUE1.PMD.empirical(X,k,n1 = 100,extra.sparse = extra.sparse)
-    if(bypass.emp){
+  return(X)
+}
+
+
+DIALOGUE.run_PMD <- function(rA, X, config = config){
+  
+  if(is.null(config$specific.pair)){
+    out<-DIALOGUE1.PMD(X = X,k = config$k,PMD2 = config$PMD2,extra.sparse = config$extra.sparse,seed1 = config$seed1)
+    emp.p<-DIALOGUE1.PMD.empirical(X,config$k,n1 = 100,extra.sparse = config$extra.sparse)
+    if(config$bypass.emp){
       emp.p1<-emp.p
       emp.p[]<-0.05
       print("Not using empirical p-values!")
       print(emp.p)
     }
   }else{
-    out<-DIALOGUE1.PMD.pairwise(X,k,specific.pair)
+    out<-DIALOGUE1.PMD.pairwise(X,config$k,config$specific.pair)
     if(out$message=="No programs"){return(out)}
-    rA<-rA[specific.pair]
-    X<-X[specific.pair]
-    emp.p<-DIALOGUE1.PMD.empirical(X,k,n1 = 20,extra.sparse = extra.sparse)
+    rA<-rA[config$specific.pair]
+    X<-X[config$specific.pair]
+    emp.p<-DIALOGUE1.PMD.empirical(X,config$k,n1 = 20,extra.sparse = config$extra.sparse)
     emp.p<-subset.matrix(emp.p,is.element(rownames(emp.p),colnames(out$ws[[1]])))
     rownames(emp.p)<-paste0("MCP",1:nrow(emp.p))
-    main<-paste(main,paste(specific.pair,collapse = "."),sep = "_")
-    cell.types<-names(rA)
+    main<-paste(config$main,paste(config$specific.pair,collapse = "."),sep = "_")
     n1<-length(cell.types)
   }
+  cell.types<-names(rA)
+  
   
   Y<-lapply(names(X), function(i) X[[i]]%*%out$ws[[i]])
   names(Y)<-names(X)
@@ -160,16 +155,29 @@ DIALOGUE1<-function(rA,k = 5,main,results.dir = "~/Desktop/DIALOGUE.results/",co
   colnames(cca.cor)<-paste(pairs1[,1],pairs1[,2],sep = "_")
   colnames(cca.cor.p)<-colnames(cca.cor)
   y<-list()
-  param<-list(conf = conf,covar = covar,n.genes = n.genes,PMD2 = PMD2,extra.sparse = extra.sparse,
-              averaging.function = averaging.function,p.anova = p.anova,specific.pair = specific.pair,
-              center.flag = center.flag,seed1 = seed1)
-  R<-list(name = paste0("DIALOGUE1_",main),param = param,
-          cell.types = cell.types,k = c(k,laply(X,ncol)),
+  
+  
+  cell.types<-names(rA)
+  names(X)<-cell.types
+  n1<-length(cell.types)
+  
+  # Finding shared samples
+  samples<-unlist(lapply(cell.types, function(x) rownames(X[[x]])))
+  samplesU<-get.abundant(samples,n1)
+  if(length(samplesU)<3){
+    return("Error: Cannot run DIALOGUE with less than 5 samples.")
+  }
+  
+  param<-list(conf = config$conf,covar = config$covar,n.genes = config$n.genes,PMD2 = config$PMD2,extra.sparse = config$extra.sparse,
+              averaging.function = config$averaging.function,p.anova = config$p.anova,specific.pair = config$specific.pair,
+              center.flag = config$center.flag,seed1 = config$seed1)
+  R<-list(name = paste0("DIALOGUE1_",config$main),param = param,
+          cell.types = cell.types,k = c(config$k,laply(X,ncol)),
           samples = samplesU,
           sample.PCs = X,
           samples.cells = list(),
-          conf = conf,
-          covar = covar,
+          conf = config$conf,
+          covar = config$covar,
           emp.p = emp.p,
           cca = out,cca.cor = list(R = cca.cor,P = cca.cor.p),
           cca.scores = list(),cca.gene.cor = list(),
@@ -182,26 +190,42 @@ DIALOGUE1<-function(rA,k = 5,main,results.dir = "~/Desktop/DIALOGUE.results/",co
     r<-rA[[x]]
     y[[x]]<-r@X[,rownames(out$ws[[x]])]%*%out$ws[[x]]
     scores0<-as.matrix(y[[x]])
-    conf.m<-r@metadata[,is.element(colnames(r@metadata),conf)]
+    conf.m<-r@metadata[,is.element(colnames(r@metadata),config$conf)]
     r@scores<-t(get.residuals(t(scores0),conf.m))
     R$cca.scores[[x]]<-r@scores
-    # R$cca.gene.cor[[x]]<-cor(t(r@tpm),r@scores)
-    # R$cca.sig[[x]]<-get.top.cor(R$cca.gene.cor[[x]],q = n.genes,min.ci = 0.05)
     
     R$cca.gene.cor1[[x]]<-cor(t(r@tpm),r@scores)
-    g1<-sort(unique(unlist(get.top.cor(R$cca.gene.cor1[[x]],q = n.genes,min.ci = 0.05))))
+    g1<-sort(unique(unlist(get.top.cor(R$cca.gene.cor1[[x]],q = config$n.genes,min.ci = 0.05))))
     R$cca.gene.cor[[x]]<-pcor.mat(t(r@tpm[g1,]),r@scores,r@cellQ)
     C1<-R$cca.gene.cor[[x]]$R
     P1<-R$cca.gene.cor[[x]]$P
     C1[P1>(0.05/nrow(r@tpm))]<-0
-    R$cca.sig[[x]]<-get.top.cor(C1,q = n.genes,min.ci = 0.05)
+    R$cca.sig[[x]]<-get.top.cor(C1,q = config$n.genes,min.ci = 0.05)
     
-    R$cca.redun.cor[[x]]<-cor(r@scores[,1:k])
+    R$cca.redun.cor[[x]]<-cor(r@scores[,1:config$k])
     R$samples.cells[[x]]<-r@samples
   }
-  if(bypass.emp){R$emp.p1<-emp.p1}
-  saveRDS(R,file = paste0(results.dir,"/",R$name,".rds"))
-  dir.create(paste0(results.dir,"/DIALOGUE2_",main))
+  
+  if(config$bypass.emp){R$emp.p1<-emp.p1}
+  saveRDS(R,file = paste0(config$results.dir,"/",R$name,".rds"))
+  dir.create(paste0(config$results.dir,"/DIALOGUE2_",config$main))
+  
+  if(R$message=="No programs"){return(R)}
+  if(!is.null(config$specific.pair)){
+    main<-paste(config$main,paste(config$specific.pair,collapse = "."),sep = "_")
+    rA<-rA[config$specific.pair]
+  }
+  
+  return(list(R=R, param = param))
+}
+
+DIALOGUE.cca <-function(rA,main,config){
+
+  print("#************DIALOGUE Step I: PMD ************#")
+  dir.create(config$results.dir)
+  X <- DIALOGUE.feature_select(rA, config)
+  R <- DIALOGUE.run_PMD(rA, X, config)
+
   return(R)
 }
 
@@ -319,12 +343,11 @@ DIALOGUE1.PMD.pairwise<-function(X,k,specific.pair){
   return(out1)
 }
 
-DIALOGUE2<-function(rA,main,results.dir = "~/Desktop/DIALOGUE.results/",subsample.flag = T,parallel.vs = F){
+DIALOGUE.mcp <- function(rA, config){
   print("#************DIALOGUE Step II: HLM ************#")
   cell.types<-names(rA)
-  if(missing(main)){main<-paste0(cell.types,collapse = "_")}
-  file1<-paste0(results.dir,"/DIALOGUE1_",main,".rds")
-  file2<-paste0(results.dir,"/DIALOGUE2_",main,".rds")
+  file1<-paste0(config$results.dir,"/DIALOGUE1_",config$main,".rds")
+  file2<-paste0(config$results.dir,"/DIALOGUE2_",config$main,".rds")
   
   R<-readRDS(file1)
   R$frm<-paste0("y ~ (1 | samples) + x + ",paste(R$covar,collapse = " + "))
@@ -337,11 +360,11 @@ DIALOGUE2<-function(rA,main,results.dir = "~/Desktop/DIALOGUE.results/",subsampl
     x1<-pairs1[i,1];x2<-pairs1[i,2]
     print(paste("#************DIALOGUE Step II (multilevel modeling):",x1,"vs.",x2,"************#"))
     p<-paste0(x1,".vs.",x2)
-    rslts<-DIALOGUE2.pair(R,rA[[x1]],rA[[x2]],cell.types,results.dir)
+    rslts<-DIALOGUE2.pair(R,rA[[x1]],rA[[x2]],cell.types,config$results.dir)
     return(rslts)
   }
   
-  if(parallel.vs){
+  if(config$parallel.vs){
     R1<-mclapply(1:nrow(pairs1),f)
     names(R1)<-paste(pairs1[,1],pairs1[,2],sep = ".vs.")
     R<-c(R,R1)
@@ -349,7 +372,14 @@ DIALOGUE2<-function(rA,main,results.dir = "~/Desktop/DIALOGUE.results/",subsampl
     for(i in 1:nrow(pairs1)){
       x1<-pairs1[i,1];x2<-pairs1[i,2]
       print(paste("#************DIALOGUE Step II (multilevel modeling):",x1,"vs.",x2,"************#"))
-      R[[paste0(x1,".vs.",x2)]]<-DIALOGUE2.pair(R,rA[[x1]],rA[[x2]],cell.types,results.dir)
+      R[[paste0(x1,".vs.",x2)]]<-DIALOGUE2.pair(R = R,r1 = rA[[x1]],r2 = rA[[x2]],cell.types = cell.types,results.dir = config$results.dir)
+      
+      R = R;
+      r1 = rA[[x1]];
+      r2 = rA[[x2]];
+      cell.types = cell.types;
+      results.dir = config$results.dir
+      
     }
   }
   
@@ -377,8 +407,8 @@ DIALOGUE2.pair<-function(R,r1,r2,cell.types,results.dir){
   idx<-intersect(get.abundant(r1@samples),get.abundant(r2@samples))
   r1<-set.cell.type(r1,is.element(r1@samples,idx))
   r2<-set.cell.type(r2,is.element(r2@samples,idx))
-  r1@scores<-R$cca.scores[[x1]][r1@cells,]
-  r2@scores<-R$cca.scores[[x2]][r2@cells,]
+  r1@scores<-R$cca.scores[[x1]]#[r1@cells,]
+  r2@scores<-R$cca.scores[[x2]]#[r2@cells,]
   r<-DLG.get.OE(r1,r2,sig1,sig2,compute.scores = F);r1<-r$r1;r2<-r$r2
   r1@tme<-r2@tpmAv[,as.character(r1@samples)]
   r2@tme<-r1@tpmAv[,as.character(r2@samples)]
@@ -395,8 +425,13 @@ DIALOGUE2.pair<-function(R,r1,r2,cell.types,results.dir){
   # r2a<-set.list(r2a,sample.per.label(r2a$samples,50),sampleName = paste0(r2a$name,"_A"))
   
   f1<-function(sig1,sig2,x){
-    p1<-DIALOGUE2.mixed.effects(r2a,x,sig1,R$frm)
-    p2<-DIALOGUE2.mixed.effects(r1a,x,sig2,R$frm)
+    p1<-DIALOGUE2.mixed.effects(r1 = r2a,x = x,sig2 = sig1,frm = R$frm)
+    p2<-DIALOGUE2.mixed.effects(r1 = r1a,x = x,sig2 = sig2,frm = R$frm)
+    ids_NA <- try(unique(which(is.na(p1)==T|is.na(p2)==T,arr.ind = T)[1,]),silent=F)
+    if (!is.character(ids_NA)){
+      p1 <- p1[-(ids_NA),]
+      p2 <- p2[-(ids_NA),]
+    }
     sig1f<-intersect.list1(get.top.cor(p1[!is.na(p1$Z),],q = 100,idx = "Z",min.ci = 1),r1@genes)
     sig2f<-intersect.list1(get.top.cor(p2[!is.na(p2$Z),],q = 100,idx = "Z",min.ci = 1),r2@genes)
     names(sig1f)<-gsub("Z.",paste0(x,"."),names(sig1f))
@@ -407,7 +442,6 @@ DIALOGUE2.pair<-function(R,r1,r2,cell.types,results.dir){
     return(results)
   }
   
-  # idx<-unique(get.strsplit(names(sig1),".",1))
   R1<-lapply(MCP.names,function(x){f1(sig1,sig2,x)})
   names(R1)<-MCP.names
   R1$p1<-NULL;R1$p2<-NULL
@@ -426,9 +460,10 @@ DIALOGUE2.mixed.effects<-function(r1,x,sig2,frm = "y ~ (1 | samples) + x + cellQ
   # r1 was a cell.type S4 that was converted to a list.
   genes<-unlist(sig2[paste0(x,c(".up",".down"))])
   b<-is.element(genes,rownames(r1$tme))
-  p<-apply.formula.HLM(r1,r1$scores[,x],
-                       X = r1$tme[genes[b],],
+  p<-apply.formula.HLM(r = r1, Y = r1$scores[,x],
+                       X = as.matrix(r1$tme[c(r1$select_genes,genes[b]),]),
                        MARGIN = 1,formula = frm)
+  
   p$pval<-p.adjust(p$P,method = "BH")
   p$up<-is.element(rownames(p),sig2[[paste0(x,".up")]])
   if(all(b)){return(p)}
@@ -439,12 +474,11 @@ DIALOGUE2.mixed.effects<-function(r1,x,sig2,frm = "y ~ (1 | samples) + x + cellQ
   return(P)
 }
 
-DIALOGUE3<-function(rA,main,results.dir = "~/Desktop/DIALOGUE.results/",full.version = F,pheno = NULL){
+DIALOGUE.summary<-function(rA,config){
   print("#************Finalizing the scores************#")
   cell.types<-names(rA)
-  if(missing(main)){main<-paste0(cell.types,collapse = "_")}
-  print(paste0(results.dir,"/DIALOGUE2_",main,".rds"))
-  R<-readRDS(paste0(results.dir,"/DIALOGUE2_",main,".rds"))
+  print(paste0(config$results.dir,"/DIALOGUE2_",config$main,".rds"))
+  R<-readRDS(paste0(config$results.dir,"/DIALOGUE2_",config$main,".rds"))
   R$gene.pval<-lapply(R$cell.types, function(x){DLG.multi.get.gene.pval(x,R)})
   names(R$gene.pval)<-R$cell.types
   
@@ -488,21 +522,21 @@ DIALOGUE3<-function(rA,main,results.dir = "~/Desktop/DIALOGUE.results/",full.ver
   R$cca.fit<-laply(R$cell.types,function(x) diag(cor(R$cca.scores[[x]],R$scores[[x]][,1:R$k["DIALOGUE"]])))
   rownames(R$cca.fit)<-R$cell.types
   
-  fileName<-paste0(results.dir,"DLG.full.output_",main,".rds")
+  fileName<-paste0(config$results.dir,"DLG.full.output_",main,".rds")
   # if(full.version){saveRDS(R,file = fileName)}
   
-  if(!is.null(pheno)){R$phenoZ<-DIALOGUE.pheno(R,pheno = pheno)}
-  if(full.version){saveRDS(R,file = fileName)}
+  if(!is.null(config$pheno)){R$phenoZ<-DIALOGUE.pheno(R,pheno = config$pheno)}
+  if(config$full.version){saveRDS(R,file = fileName)}
   
   R1<-R[intersect(names(R),c("cell.types","scores","gene.pval","param","MCP.cell.types","MCPs",
-                             "pref","k","name","phenoZ",results.dir))]
-  fileName<-paste0(results.dir,"DLG.output_",main,".rds")
+                             "pref","k","name","phenoZ",config$results.dir))]
+  fileName<-paste0(config$results.dir,"DLG.output_",main,".rds")
   saveRDS(R1,file = fileName)
   
-  if(!full.version){
-    file.remove(paste0(results.dir,"DIALOGUE1_",main,".rds"))
-    file.remove(paste0(results.dir,"DIALOGUE2_",main,".rds"))
-    unlink(paste0(results.dir,"DIALOGUE2_",main,"/"),recursive = T)
+  if(!config$full.version){
+    file.remove(paste0(config$results.dir,"DIALOGUE1_",main,".rds"))
+    file.remove(paste0(config$results.dir,"DIALOGUE2_",main,".rds"))
+    unlink(paste0(config$results.dir,"DIALOGUE2_",main,"/"),recursive = T)
   }
   return(R1)
 }

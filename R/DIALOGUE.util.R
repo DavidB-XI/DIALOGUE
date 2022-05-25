@@ -1,3 +1,18 @@
+dialogue_config <- function(verbose=F){
+  config <- list(main = "run", k = 5,results.dir = getwd(),plot.flag = T,pheno = NULL,
+                 PMD2 = F,conf = "cellQ",covar = c("cellQ","tme.qc"),n.genes = 200,
+                 averaging.function = colMedians,p.anova = 0.05,specific.pair = NULL,
+                 parallel.vs = F,center.flag = T,extra.sparse = F, bypass.emp = F, abn.c = 15, spatial.flag = F,
+                 full.version = F,pheno = NULL
+                 )
+  
+  if (verbose){
+    print(config)
+  }
+  
+  return(config)
+}
+
 average.mat.rows<-function(m,ids,f = colMeans){
   ids.u<-sort(get.abundant(ids))
   m1<-laply(ids.u,function(x){return(f(m[is.element(ids,x),]))})
@@ -197,7 +212,7 @@ apply.formula.HLM<-function(r,X,Y,MARGIN = 1,formula = "y ~ (1 | samples) + x",t
 formula.HLM<-function(y,x,r0, formula = "y ~ (1 | samples) + x",val = ifelse(is.numeric(x),"","TRUE"),return.all = F){
   r0$x<-x;r0$y<-y
   f<-function(r0){
-    M1 <- with(r0, lmer (formula = formula))
+    M1 <- with(r0, lmer(formula = formula))
     if(return.all){
       c1<-summary(M1)$coef[,c("Estimate","Pr(>|t|)")]
     }else{
