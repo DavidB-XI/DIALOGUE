@@ -461,7 +461,10 @@ DIALOGUE2.mixed.effects<-function(r1,x,sig2,frm = "y ~ (1 | samples) + x + cellQ
   genes<-unlist(sig2[paste0(x,c(".up",".down"))])
   b<-is.element(genes,rownames(r1$tme))
   p<-apply.formula.HLM(r = r1, Y = r1$scores[,x],
-                       X = as.matrix(r1$tme[c(r1$select_genes,genes[b]),]),
+                       X = as.matrix(r1$tme[c(r1$select_genes,genes[b]),]), 
+                       # c(r1$select_genes,genes[b]) - this is an important line for more interpretability and reproducibility
+                       # how is it more interpretable? r1$select_genes requests genes to be added into the HLM based on known literature (user-specified)
+                       # how is it more reproducible? shifting k = 3 to k = 4 retrieves a similar gene list, with the notion that a small change in the number of components should affect MCPs minimally
                        MARGIN = 1,formula = frm)
   
   p$pval<-p.adjust(p$P,method = "BH")
