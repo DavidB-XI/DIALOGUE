@@ -1,3 +1,4 @@
+#' @export
 dialogue_config <- function(verbose=F){
   config <- list(main = "run", k = 5,results.dir = getwd(),plot.flag = T,pheno = NULL,
                  PMD2 = F,conf = "cellQ",covar = c("cellQ","tme.qc"),n.genes = 200,

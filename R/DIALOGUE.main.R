@@ -84,6 +84,7 @@ DIALOGUE.pheno<-function(R,pheno =  "clin.status",cca.flag = F,rA,frm,selected.s
   return(Z)
 }
 
+#' @export
 DIALOGUE.feature_select <- function(rA, config=config){
   
   X <- lapply(rA, function(r){
@@ -120,7 +121,7 @@ DIALOGUE.feature_select <- function(rA, config=config){
   return(X)
 }
 
-
+#' @export
 DIALOGUE.run_PMD <- function(rA, X, config = config){
   
   if(is.null(config$specific.pair)){
@@ -342,6 +343,7 @@ DIALOGUE1.PMD.pairwise<-function(X,k,specific.pair){
   return(out1)
 }
 
+#' @export
 DIALOGUE.mcp <- function(rA, config){
   print("#************DIALOGUE Step II: HLM ************#")
   cell.types<-names(rA)
@@ -469,6 +471,7 @@ DIALOGUE2.mixed.effects<-function(r1,x,sig2,frm = "y ~ (1 | samples) + x + cellQ
   return(P)
 }
 
+#' @export
 DIALOGUE.summary<-function(rA,config){
   print("#************Finalizing the scores************#")
   cell.types<-names(rA)
