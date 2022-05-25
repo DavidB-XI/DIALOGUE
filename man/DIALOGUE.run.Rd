@@ -4,7 +4,7 @@
 \alias{DIALOGUE.run}
 \title{DIALOGUE.run}
 \usage{
-DIALOGUE.run(rA, main, config = dialogue_config(F))
+DIALOGUE.run(rA, config = dialogue_config(F))
 }
 \arguments{
 \item{rA}{list of \linkS4class{cell.type} objects.}

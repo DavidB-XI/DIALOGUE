@@ -28,16 +28,15 @@
 
 
 DIALOGUE.run<-function(rA,
-                       main,
                        config = dialogue_config(F)){
 
-  X <- DIALOGUE.feature_select(rA, config)
-  R <- DIALOGUE.run_PMD(rA, X, config)
-  R <- DIALOGUE.mcp(rA = rA, main = main, config = config)
-  R <- DIALOGUE.summary(rA = rA,main = main, config = config)
+  X <- DIALOGUE.feature_select(rA = rA, config = config)
+  R <- DIALOGUE.run_PMD(rA = rA, X = X, config = config)
+  R <- DIALOGUE.mcp(rA = rA, config = config)
+  R <- DIALOGUE.summary(rA = rA, config = config)
   
-  if(plot.flag){
-    DIALOGUE.plot(R,results.dir = results.dir,pheno = pheno)
+  if(config$plot.flag){
+    DIALOGUE.plot(R,results.dir = config$results.dir,pheno = config$pheno)
   }
   
   return(R)
@@ -219,7 +218,7 @@ DIALOGUE.run_PMD <- function(rA, X, config = config){
   return(list(R=R, param = param))
 }
 
-DIALOGUE.cca <-function(rA,main,config){
+DIALOGUE.cca <-function(rA,config){
 
   print("#************DIALOGUE Step I: PMD ************#")
   dir.create(config$results.dir)
@@ -236,7 +235,7 @@ DIALOGUE1.PMD<-function(X,k,PMD2 = F,extra.sparse = F,seed1 = 1234){
   }else{
     perm.out <- MultiCCA.permute(X,type=rep("standard",length(X)),trace = F,penalties = sqrt(ncol(X[[1]]))/2)
   }
-  out <- MultiCCA(X, type=rep("standard",length(X)),
+  out <- MultiCCA(xlist = X, type=rep("standard",length(X)),
                   penalty=perm.out$bestpenalties,niter = 100,
                   ncomponents=k, ws=perm.out$ws.init,trace = F)
   names(out$ws)<-names(X)
@@ -373,17 +372,10 @@ DIALOGUE.mcp <- function(rA, config){
       x1<-pairs1[i,1];x2<-pairs1[i,2]
       print(paste("#************DIALOGUE Step II (multilevel modeling):",x1,"vs.",x2,"************#"))
       R[[paste0(x1,".vs.",x2)]]<-DIALOGUE2.pair(R = R,r1 = rA[[x1]],r2 = rA[[x2]],cell.types = cell.types,results.dir = config$results.dir)
-      
-      R = R;
-      r1 = rA[[x1]];
-      r2 = rA[[x2]];
-      cell.types = cell.types;
-      results.dir = config$results.dir
-      
     }
   }
   
-  R$name<-paste0("DIALOGUE2_",main)
+  R$name<-paste0("DIALOGUE2_",config$main)
   saveRDS(R,file = file2)
   return(R)
 }
@@ -398,7 +390,7 @@ DIALOGUE2.pair<-function(R,r1,r2,cell.types,results.dir){
   print(paste(length(MCP.names),"MCPs identified for these cell types."))
   main<-gsub("DIALOGUE1_","",R$name)
   
-  saveFile<-paste0(results.dir,"/DIALOGUE2_",main,"/",x1,".vs.",x2,".rds")
+  saveFile<-paste0(results.dir,"/DIALOGUE2_",config$main,"/",x1,".vs.",x2,".rds")
   if(file.exists(saveFile)){
     return(readRDS(saveFile))
   }
@@ -518,14 +510,14 @@ DIALOGUE.summary<-function(rA,config){
   names(R$sig2)<-cell.types
   names(R$scores)<-cell.types
   
-  R$name<-paste0("DLG.output_",main)
+  R$name<-paste0("DLG.output_",config$main)
   R$MCPs.full<-sig2MCP(R$sig1)
   R$MCPs<-sig2MCP(R$sig2)
   
   R$cca.fit<-laply(R$cell.types,function(x) diag(cor(R$cca.scores[[x]],R$scores[[x]][,1:R$k["DIALOGUE"]])))
   rownames(R$cca.fit)<-R$cell.types
   
-  fileName<-paste0(config$results.dir,"DLG.full.output_",main,".rds")
+  fileName<-paste0(config$results.dir,"DLG.full.output_",config$main,".rds")
   # if(full.version){saveRDS(R,file = fileName)}
   
   if(!is.null(config$pheno)){R$phenoZ<-DIALOGUE.pheno(R,pheno = config$pheno)}
@@ -533,13 +525,13 @@ DIALOGUE.summary<-function(rA,config){
   
   R1<-R[intersect(names(R),c("cell.types","scores","gene.pval","param","MCP.cell.types","MCPs",
                              "pref","k","name","phenoZ",config$results.dir))]
-  fileName<-paste0(config$results.dir,"DLG.output_",main,".rds")
+  fileName<-paste0(config$results.dir,"DLG.output_",config$main,".rds")
   saveRDS(R1,file = fileName)
   
   if(!config$full.version){
-    file.remove(paste0(config$results.dir,"DIALOGUE1_",main,".rds"))
-    file.remove(paste0(config$results.dir,"DIALOGUE2_",main,".rds"))
-    unlink(paste0(config$results.dir,"DIALOGUE2_",main,"/"),recursive = T)
+    file.remove(paste0(config$results.dir,"DIALOGUE1_",config$main,".rds"))
+    file.remove(paste0(config$results.dir,"DIALOGUE2_",config$main,".rds"))
+    unlink(paste0(config$results.dir,"DIALOGUE2_",config$main,"/"),recursive = T)
   }
   return(R1)
 }
