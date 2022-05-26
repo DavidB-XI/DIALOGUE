@@ -15,7 +15,7 @@
 cell.type <- setClass(Class = "cell.type",
                       slots = c("name","cells","genes","cellQ",
                                 "tpm","tpmAv","qcAv","zscores",
-                                "X","samples",
+                                "X","samples","select_genes",
                                 "metadata",
                                 "scores","scoresAv",
                                 "tme","tme.qc","gene.pval",
@@ -35,16 +35,49 @@ cell.type <- setClass(Class = "cell.type",
 #' @field cell.type a representation of a specific type of cells
 #' @export
 
-make.cell.type<-function(name,tpm,samples,X = NULL,metadata = NULL,
-                         tpmAv = t(average.mat.rows(t(tpm),samples)),
-                         cellQ){
-  r<-cell.type(name = gsub("_","",name),
+make.cell.type<-function(name, tpm, samples, select_genes, cellQ, X = NULL, metadata = NULL, tpmAv=NULL,qcAv=NULL,
+                         dim.reduce = "gcode", dim.k = 5){
+  
+  if (is.null(X)){
+    if (dim.reduce=="irlba"){
+      X <- irlba::irlba(A = (tpm), nv = dim.k)$v
+    }
+    if (dim.reduce=="gcode"){
+      config <- gcode::extract_config(F)
+      config$init <- list(alpha="irlba",beta="irlba")
+      config$i_dim <- dim.k
+      config$j_dim <- dim.k
+      
+      join <- gcode::extract_join_framework(F)
+      join$complete <- lapply(join$complete,function(X){1})
+      
+      X <- t((gcode::gcode(data_list = list(tpm), config = config, join = join)$main.parameters$alpha_sample[[1]])%*%tpm)
+    }
+    
+    row.names(X) <- colnames(tpm)
+    colnames(X) <- paste("PC",c(1:dim(X)[2]))
+  }
+  if(is.null(tpmAv)){
+    tpmAv = t(average.mat.rows(m = t(tpm),ids = samples))
+  }
+  if(is.null(qcAv)){
+    qcAv <- aggregate(x = cellQ,by = list(samples),FUN = mean)
+    row.names(qcAv) <- unique(samples)
+  }
+  if(is.null(metadata)){
+    metadata <- 0
+  }
+  
+  
+  
+  r<-cell.type(name = name,
                cells = colnames(tpm),
                genes = rownames(tpm),
+               select_genes = select_genes,
                cellQ = cellQ,
                tpm = tpm,
                tpmAv = tpmAv,
-               qcAv = aggregate(x = cellQ,by = list(samples),FUN = mean),
+               qcAv = qcAv,
                X = X,
                samples = samples,
                metadata = cbind.data.frame(cellQ = cellQ,metadata),
@@ -55,8 +88,6 @@ make.cell.type<-function(name,tpm,samples,X = NULL,metadata = NULL,
     print("Error: Cell ids do not match the X input.")
     return("Error: Cell ids do not match the X input.")
   }
-  rownames(r@qcAv)<-r@qcAv[,1]
-  r@qcAv[,1]<-r@qcAv[,2]
   return(r)
 }
 

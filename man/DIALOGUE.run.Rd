@@ -4,22 +4,7 @@
 \alias{DIALOGUE.run}
 \title{DIALOGUE.run}
 \usage{
-DIALOGUE.run(
-  rA,
-  main,
-  k = 3,
-  results.dir = getwd(),
-  plot.flag = T,
-  pheno = NULL,
-  PMD2 = F,
-  conf = "cellQ",
-  covar = c("cellQ", "tme.qc"),
-  n.genes = 200,
-  averaging.function = colMedians,
-  p.anova = 0.05,
-  specific.pair = NULL,
-  parallel.vs = F
-)
+DIALOGUE.run(rA, config = dialogue_config(F))
 }
 \arguments{
 \item{rA}{list of \linkS4class{cell.type} objects.}
@@ -29,6 +14,10 @@ DIALOGUE.run(
 \item{results.dir}{path to the results directory, where the output will be saved;}
 
 \item{plot.flag}{if TRUE then \code{\link{DIALOGUE.plot}} will be called to plot the results; default is FALSE;}
+
+\item{abn.c}{the minimal number of cells that a sample should have to be considered for MCP detection;}
+
+\item{spatial.flag}{should be TRUE if working with spatial data with small niches, and TRUE if working with single cell data or larger tissue microenvironment niches. The default value is FALSE.}
 
 \item{add.effects}{whether to add additional covariates to the multilevel model;
 if TRUE then the covariates will extracted from the [conf] slot in the \linkS4class{cell.type} objects;
