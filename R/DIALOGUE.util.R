@@ -1,4 +1,13 @@
+#' dialogue_config
+#' @description Summarises previous feature selection, PMD, and MCP steps
+#' 
+#' @param verbose Print out the configuration parameters?
+#'
+#' @return configuration parameters
+#'
+#' @author Livnat Jerby-Arnon, modified by David Banh
 #' @export
+#' 
 dialogue_config <- function(verbose=F){
   config <- list(main = "run", k = 5,results.dir = getwd(),plot.flag = T,pheno = NULL,
                  PMD2 = F,conf = "cellQ",covar = c("cellQ","tme.qc"),n.genes = 200,

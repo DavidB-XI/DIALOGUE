@@ -84,8 +84,18 @@ DIALOGUE.pheno<-function(R,pheno =  "clin.status",cca.flag = F,rA,frm,selected.s
   return(Z)
 }
 
+#' DIALOGUE.feature_select
+#' @description Selects latent features
+#' 
+#' @param rA list of \linkS4class{cell.type} objects.
+#' @param config configuration parameters
+#'
+#' @return A list with the following components:
+#' @return quality controlled latent features most informative
+#'
+#' @author Livnat Jerby-Arnon, modified by David Banh
 #' @export
-DIALOGUE.feature_select <- function(rA, config=config){
+DIALOGUE.feature_select <- function(rA, config){
   
   X <- lapply(rA, function(r){
     X1<-average.mat.rows(r@X,r@samples,f = config$averaging.function)
@@ -121,7 +131,19 @@ DIALOGUE.feature_select <- function(rA, config=config){
   return(X)
 }
 
+#' DIALOGUE.run_PMD
+#' @description Runs penalised matrix decomposition on multiple matrices via Multiple Canonical Correlation Analysis
+#' 
+#' @param rA list of \linkS4class{cell.type} objects.
+#' @param X list of latent components per \linkS4class{cell.type} object. 
+#' @param config configuration parameters
+#'
+#' @return A list with the following components:
+#' @return R list of \linkS4class{cell.type} objects.
+#'
+#' @author Livnat Jerby-Arnon, modified by David Banh
 #' @export
+#' 
 DIALOGUE.run_PMD <- function(rA, X, config = config){
   
   if(is.null(config$specific.pair)){
@@ -343,7 +365,19 @@ DIALOGUE1.PMD.pairwise<-function(X,k,specific.pair){
   return(out1)
 }
 
+
+#' DIALOGUE.mcp
+#' @description Runs a hierarchical linear model to identify multicellular programs of coordinated gene sets
+#' 
+#' @param rA list of \linkS4class{cell.type} objects.
+#' @param config configuration parameters
+#'
+#' @return A list with the following components:
+#' @return R list of \linkS4class{cell.type} objects.
+#'
+#' @author Livnat Jerby-Arnon, modified by David Banh
 #' @export
+#' 
 DIALOGUE.mcp <- function(rA, config){
   print("#************DIALOGUE Step II: HLM ************#")
   cell.types<-names(rA)
@@ -471,7 +505,19 @@ DIALOGUE2.mixed.effects<-function(r1,x,sig2,frm = "y ~ (1 | samples) + x + cellQ
   return(P)
 }
 
+
+#' DIALOGUE.summary
+#' @description Summarises previous feature selection, PMD, and MCP steps
+#' 
+#' @param rA list of \linkS4class{cell.type} objects.
+#' @param config configuration parameters
+#'
+#' @return A list with the following components:
+#' @return R list of \linkS4class{cell.type} objects.
+#'
+#' @author Livnat Jerby-Arnon, modified by David Banh
 #' @export
+#' 
 DIALOGUE.summary<-function(rA,config){
   print("#************Finalizing the scores************#")
   cell.types<-names(rA)
