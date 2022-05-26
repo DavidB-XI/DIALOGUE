@@ -13,7 +13,7 @@ dialogue_config(verbose = F)
 configuration parameters
 }
 \description{
-Summarises previous feature selection, PMD, and MCP steps
+Provides access to all configuration parameters
 }
 \author{
 Livnat Jerby-Arnon, modified by David Banh

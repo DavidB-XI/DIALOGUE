@@ -1,5 +1,5 @@
 #' dialogue_config
-#' @description Summarises previous feature selection, PMD, and MCP steps
+#' @description Provides access to all configuration parameters
 #' 
 #' @param verbose Print out the configuration parameters?
 #'
