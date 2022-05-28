@@ -455,11 +455,6 @@ DIALOGUE2.pair<-function(R,r1,r2,cell.types,results.dir){
   f1<-function(sig1,sig2,x){
     p1<-DIALOGUE2.mixed.effects(r1 = r2a,x = x,sig2 = sig1,frm = R$frm)
     p2<-DIALOGUE2.mixed.effects(r1 = r1a,x = x,sig2 = sig2,frm = R$frm)
-    ids_NA <- try(unique(which(is.na(p1)==T|is.na(p2)==T,arr.ind = T)[1,]),silent=F)
-    if (!is.character(ids_NA)){
-      p1 <- p1[-(ids_NA),]
-      p2 <- p2[-(ids_NA),]
-    }
     sig1f<-intersect.list1(get.top.cor(p1[!is.na(p1$Z),],q = 100,idx = "Z",min.ci = 1),r1@genes)
     sig2f<-intersect.list1(get.top.cor(p2[!is.na(p2$Z),],q = 100,idx = "Z",min.ci = 1),r2@genes)
     names(sig1f)<-gsub("Z.",paste0(x,"."),names(sig1f))
@@ -487,9 +482,9 @@ DIALOGUE2.pair<-function(R,r1,r2,cell.types,results.dir){
 DIALOGUE2.mixed.effects<-function(r1,x,sig2,frm = "y ~ (1 | samples) + x + cellQ"){
   # r1 was a cell.type S4 that was converted to a list.
   genes<-unlist(sig2[paste0(x,c(".up",".down"))])
-  b<-is.element(genes,rownames(r1$tme))
+  b<-is.element(genes,c(r1$select_genes,rownames(r1$tme)))
   p<-apply.formula.HLM(r = r1, Y = r1$scores[,x],
-                       X = as.matrix(r1$tme[c(r1$select_genes,genes[b]),]), 
+                       X = as.matrix(r1$tme[c(genes[b]),]), 
                        # c(r1$select_genes,genes[b]) - this is an important line for more interpretability and reproducibility
                        # how is it more interpretable? r1$select_genes requests genes to be added into the HLM based on known literature (user-specified)
                        # how is it more reproducible? shifting k = 3 to k = 4 retrieves a similar gene list, with the notion that a small change in the number of components should affect MCPs minimally
